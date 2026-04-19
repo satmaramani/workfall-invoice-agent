@@ -4,7 +4,7 @@ from uuid import uuid4
 
 from fastapi import HTTPException, status
 
-from app.clients.a2a import call_agent
+from app.clients.a2a import call_agent, call_agent_with_retry
 from app.core.config import INVENTORY_BASE_URL, MARKET_INTELLIGENCE_BASE_URL, TAX_RATE
 from app.core.db import persist_invoice
 from app.core.utils import now_iso
@@ -23,7 +23,7 @@ async def build_invoice(invoice_request: InvoiceRequest, context: A2AContext) ->
     market_success_count = 0
     try:
         for item in invoice_request.items:
-            reservation = await call_agent(
+            reservation = await call_agent_with_retry(
                 INVENTORY_BASE_URL,
                 "reserve_stock",
                 {"product_id": item.product_id, "quantity": item.quantity},
@@ -47,7 +47,7 @@ async def build_invoice(invoice_request: InvoiceRequest, context: A2AContext) ->
             market_result = None
             if invoice_request.include_market_insights:
                 market_attempted = True
-                market_response = await call_agent(
+                market_response = await call_agent_with_retry(
                     MARKET_INTELLIGENCE_BASE_URL,
                     "pricing_support",
                     {"product_id": item.product_id},
@@ -119,5 +119,10 @@ async def build_invoice(invoice_request: InvoiceRequest, context: A2AContext) ->
         return result
     except Exception:
         for item in reservations:
-            await call_agent(INVENTORY_BASE_URL, "release_stock", {"product_id": item.product_id, "quantity": item.quantity}, context)
+            await call_agent_with_retry(
+                INVENTORY_BASE_URL,
+                "release_stock",
+                {"product_id": item.product_id, "quantity": item.quantity},
+                context,
+            )
         raise

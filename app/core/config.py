@@ -13,6 +13,7 @@ SERVICE_PORT = int(os.getenv("SERVICE_PORT", "8002"))
 INVENTORY_BASE_URL = os.getenv("INVENTORY_BASE_URL", "http://localhost:8001")
 MARKET_INTELLIGENCE_BASE_URL = os.getenv("MARKET_INTELLIGENCE_BASE_URL", "http://localhost:8003")
 A2A_SHARED_TOKEN = os.getenv("A2A_SHARED_TOKEN", "")
+API_SHARED_TOKEN = os.getenv("API_SHARED_TOKEN", "local-dev-ui-token")
 TAX_RATE = float(os.getenv("TAX_RATE", "0.18"))
 DATABASE_URL = os.getenv(
     "DATABASE_URL",

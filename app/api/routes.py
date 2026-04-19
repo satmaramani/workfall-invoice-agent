@@ -6,7 +6,7 @@ from fastapi import APIRouter, Header
 
 from app.core.config import INVENTORY_BASE_URL, MARKET_INTELLIGENCE_BASE_URL, SERVICE_NAME, SERVICE_PORT
 from app.core.db import fetch_invoice
-from app.core.security import require_agent_token
+from app.core.security import require_agent_token, require_api_token
 from app.core.utils import now_iso
 from app.schemas.common import A2AError, A2AMeta, A2ARequest, A2AResponse, A2AContext
 from app.schemas.invoice import InvoiceItemRequest, InvoiceRequest
@@ -38,12 +38,14 @@ def capabilities() -> dict:
 
 
 @router.get("/invoices/{invoice_id}")
-def get_invoice(invoice_id: str) -> dict:
+def get_invoice(invoice_id: str, x_api_token: str | None = Header(default=None)) -> dict:
+    require_api_token(x_api_token)
     return fetch_invoice(invoice_id)
 
 
 @router.post("/invoices")
-async def create_invoice(invoice_request: InvoiceRequest) -> dict:
+async def create_invoice(invoice_request: InvoiceRequest, x_api_token: str | None = Header(default=None)) -> dict:
+    require_api_token(x_api_token)
     context = A2AContext(
         session_id=invoice_request.session_id or str(uuid4()),
         workflow_id=invoice_request.workflow_id or str(uuid4()),

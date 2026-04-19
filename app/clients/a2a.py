@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 from uuid import uuid4
 
 import httpx
+from fastapi import HTTPException, status
 
 from app.core.db import record_trace
 from app.core.security import make_headers
@@ -35,3 +37,39 @@ async def call_agent(base_url: str, intent: str, payload: dict, context: A2ACont
             output_payload=result,
         )
         return result
+
+
+async def call_agent_with_retry(
+    base_url: str,
+    intent: str,
+    payload: dict,
+    context: A2AContext,
+    max_attempts: int = 3,
+    initial_backoff_seconds: float = 0.4,
+) -> dict:
+    last_error: Exception | None = None
+    backoff_seconds = initial_backoff_seconds
+
+    for attempt in range(1, max_attempts + 1):
+        try:
+            response = await call_agent(base_url, intent, payload, context)
+            if response.get("status") == "failed" and response.get("error", {}).get("retriable"):
+                last_error = HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail=response["error"]["message"],
+                )
+            else:
+                return response
+        except (httpx.HTTPError, HTTPException) as exc:
+            last_error = exc
+
+        if attempt < max_attempts:
+            await asyncio.sleep(backoff_seconds)
+            backoff_seconds *= 2
+
+    if isinstance(last_error, HTTPException):
+        raise last_error
+    raise HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail=f"A2A communication failed for intent '{intent}'",
+    ) from last_error
