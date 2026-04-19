@@ -15,6 +15,7 @@ async def lifespan(app: FastAPI):
         app.state.db_available = True
     except Exception:
         app.state.db_available = False
+        raise
     yield
 
 
