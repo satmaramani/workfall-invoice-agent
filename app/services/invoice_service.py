@@ -15,42 +15,57 @@ from app.schemas.invoice import InvoiceRequest
 async def build_invoice(invoice_request: InvoiceRequest, context: A2AContext) -> dict:
     reservations = []
     line_items = []
+    downstream_steps = []
+    downstream_agents_used = []
+    subtotal = 0.0
+    market_summaries = []
+    market_attempted = False
+    market_success_count = 0
     try:
         for item in invoice_request.items:
-            inventory_check = await call_agent(
-                INVENTORY_BASE_URL,
-                "check_stock",
-                {"product_id": item.product_id, "quantity": item.quantity},
-                context,
-            )
-            if inventory_check["status"] != "success" or not inventory_check["result"]["is_available"]:
-                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Insufficient stock for {item.product_id}")
-
-        subtotal = 0.0
-        market_summaries = []
-        for item in invoice_request.items:
-            market_result = None
-            if invoice_request.include_market_insights:
-                market_response = await call_agent(
-                    MARKET_INTELLIGENCE_BASE_URL,
-                    "pricing_support",
-                    {"product_id": item.product_id},
-                    context,
-                )
-                if market_response["status"] == "success":
-                    market_result = market_response["result"]
-
             reservation = await call_agent(
                 INVENTORY_BASE_URL,
                 "reserve_stock",
                 {"product_id": item.product_id, "quantity": item.quantity},
                 context,
             )
+            downstream_agents_used.append("inventory")
+            downstream_steps.append(
+                {
+                    "agent": "inventory",
+                    "intent": "reserve_stock",
+                    "product_id": item.product_id,
+                    "quantity": item.quantity,
+                    "status": reservation["status"],
+                }
+            )
             if reservation["status"] != "success":
                 raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Unable to reserve stock for {item.product_id}")
 
             reservations.append(item)
             product = reservation["result"]["product"]
+            market_result = None
+            if invoice_request.include_market_insights:
+                market_attempted = True
+                market_response = await call_agent(
+                    MARKET_INTELLIGENCE_BASE_URL,
+                    "pricing_support",
+                    {"product_id": item.product_id},
+                    context,
+                )
+                downstream_agents_used.append("market-intelligence")
+                downstream_steps.append(
+                    {
+                        "agent": "market-intelligence",
+                        "intent": "pricing_support",
+                        "product_id": item.product_id,
+                        "status": market_response["status"],
+                    }
+                )
+                if market_response["status"] == "success":
+                    market_success_count += 1
+                    market_result = market_response["result"]
+
             unit_price = market_result["recommended_price"] if invoice_request.include_market_insights and market_result else product["unit_price"]
             line_total = round(unit_price * item.quantity, 2)
             subtotal += line_total
@@ -75,6 +90,15 @@ async def build_invoice(invoice_request: InvoiceRequest, context: A2AContext) ->
                     }
                 )
 
+        if not invoice_request.include_market_insights:
+            market_insight_status = "skipped"
+        elif market_success_count == len(invoice_request.items):
+            market_insight_status = "used"
+        elif market_success_count == 0 and market_attempted:
+            market_insight_status = "fallback_to_inventory"
+        else:
+            market_insight_status = "partial_fallback"
+
         tax_amount = round(subtotal * TAX_RATE, 2)
         total_amount = round(subtotal + tax_amount, 2)
         result = {
@@ -85,8 +109,10 @@ async def build_invoice(invoice_request: InvoiceRequest, context: A2AContext) ->
             "tax_rate": TAX_RATE,
             "tax_amount": tax_amount,
             "total_amount": total_amount,
-            "market_insight_status": "used" if invoice_request.include_market_insights else "skipped",
+            "market_insight_status": market_insight_status,
             "market_summaries": market_summaries,
+            "downstream_agents_used": list(dict.fromkeys(downstream_agents_used)),
+            "workflow_steps": downstream_steps,
             "generated_at": now_iso(),
         }
         persist_invoice(result, context)

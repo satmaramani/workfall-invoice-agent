@@ -1,6 +1,12 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+
+load_dotenv(Path(__file__).resolve().parents[2] / ".env", override=False)
 
 SERVICE_NAME = os.getenv("SERVICE_NAME", "invoice-agent")
 SERVICE_PORT = int(os.getenv("SERVICE_PORT", "8002"))

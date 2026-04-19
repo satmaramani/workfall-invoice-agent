@@ -35,11 +35,25 @@ def init_db() -> None:
                     total_amount NUMERIC(12, 2) NOT NULL,
                     market_insight_status TEXT NOT NULL,
                     market_summaries JSONB NOT NULL DEFAULT '[]'::jsonb,
+                    downstream_agents_used JSONB NOT NULL DEFAULT '[]'::jsonb,
+                    workflow_steps JSONB NOT NULL DEFAULT '[]'::jsonb,
                     session_id TEXT,
                     workflow_id TEXT,
                     trace_id TEXT,
                     generated_at TIMESTAMPTZ NOT NULL
                 )
+                """
+            )
+            cur.execute(
+                """
+                ALTER TABLE invoices
+                ADD COLUMN IF NOT EXISTS downstream_agents_used JSONB NOT NULL DEFAULT '[]'::jsonb
+                """
+            )
+            cur.execute(
+                """
+                ALTER TABLE invoices
+                ADD COLUMN IF NOT EXISTS workflow_steps JSONB NOT NULL DEFAULT '[]'::jsonb
                 """
             )
             cur.execute(
@@ -124,9 +138,10 @@ def persist_invoice(result: dict, context: A2AContext) -> None:
                 """
                 INSERT INTO invoices (
                     invoice_id, customer_name, subtotal, tax_rate, tax_amount, total_amount,
-                    market_insight_status, market_summaries, session_id, workflow_id, trace_id, generated_at
+                    market_insight_status, market_summaries, downstream_agents_used, workflow_steps,
+                    session_id, workflow_id, trace_id, generated_at
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     result["invoice_id"],
@@ -137,6 +152,8 @@ def persist_invoice(result: dict, context: A2AContext) -> None:
                     result["total_amount"],
                     result["market_insight_status"],
                     Jsonb(result["market_summaries"]),
+                    Jsonb(result.get("downstream_agents_used", [])),
+                    Jsonb(result.get("workflow_steps", [])),
                     context.session_id,
                     context.workflow_id,
                     context.trace_id,
@@ -191,6 +208,8 @@ def fetch_invoice(invoice_id: str) -> dict:
         "total_amount": float(invoice["total_amount"]),
         "market_insight_status": invoice["market_insight_status"],
         "market_summaries": invoice["market_summaries"],
+        "downstream_agents_used": invoice.get("downstream_agents_used", []),
+        "workflow_steps": invoice.get("workflow_steps", []),
         "generated_at": invoice["generated_at"].isoformat(),
         "items": [
             {

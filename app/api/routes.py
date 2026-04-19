@@ -43,7 +43,11 @@ def get_invoice(invoice_id: str) -> dict:
 
 @router.post("/invoices")
 async def create_invoice(invoice_request: InvoiceRequest) -> dict:
-    context = A2AContext(session_id=str(uuid4()), workflow_id=str(uuid4()), trace_id=str(uuid4()))
+    context = A2AContext(
+        session_id=invoice_request.session_id or str(uuid4()),
+        workflow_id=invoice_request.workflow_id or str(uuid4()),
+        trace_id=invoice_request.trace_id or str(uuid4()),
+    )
     return await build_invoice(invoice_request, context)
 
 
@@ -66,6 +70,9 @@ async def a2a_request(request: A2ARequest, x_agent_token: str | None = Header(de
             items=payload_items,
             customer_name=request.payload.get("customer_name", "Internal Demo Customer"),
             include_market_insights=request.payload.get("include_market_insights", True),
+            session_id=request.context.session_id,
+            workflow_id=request.context.workflow_id,
+            trace_id=request.context.trace_id,
         )
         result = await build_invoice(invoice_request, request.context)
         return A2AResponse(

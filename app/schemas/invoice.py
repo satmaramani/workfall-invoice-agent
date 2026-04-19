@@ -12,3 +12,6 @@ class InvoiceRequest(BaseModel):
     items: list[InvoiceItemRequest]
     customer_name: str = "Internal Demo Customer"
     include_market_insights: bool = True
+    session_id: str | None = None
+    workflow_id: str | None = None
+    trace_id: str | None = None
