@@ -12,6 +12,7 @@ from app.schemas.common import A2AContext, A2ARequest
 
 
 async def call_agent(base_url: str, intent: str, payload: dict, context: A2AContext) -> dict:
+    # Invoice talks to Inventory and Market through the same A2A envelope used elsewhere in the system.
     request = A2ARequest(
         request_id=str(uuid4()),
         source_agent="invoice",
@@ -47,6 +48,7 @@ async def call_agent_with_retry(
     max_attempts: int = 3,
     initial_backoff_seconds: float = 0.4,
 ) -> dict:
+    # Exponential backoff is enough here because downstream calls are short and user-triggered.
     last_error: Exception | None = None
     backoff_seconds = initial_backoff_seconds
 

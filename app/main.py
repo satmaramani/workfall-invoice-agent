@@ -10,6 +10,7 @@ from app.core.db import init_db
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Invoice startup mirrors the other services so local runs and compose behave the same way.
     try:
         init_db()
         app.state.db_available = True

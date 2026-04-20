@@ -46,6 +46,7 @@ def get_invoice(invoice_id: str, x_api_token: str | None = Header(default=None))
 @router.post("/invoices")
 async def create_invoice(invoice_request: InvoiceRequest, x_api_token: str | None = Header(default=None)) -> dict:
     require_api_token(x_api_token)
+    # Direct UI calls still get full trace/session ids so they line up with the rest of the system.
     context = A2AContext(
         session_id=invoice_request.session_id or str(uuid4()),
         workflow_id=invoice_request.workflow_id or str(uuid4()),

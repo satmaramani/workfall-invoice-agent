@@ -13,6 +13,7 @@ from app.schemas.invoice import InvoiceRequest
 
 
 async def build_invoice(invoice_request: InvoiceRequest, context: A2AContext) -> dict:
+    # Invoice validates availability by reserving stock, which is safer than a separate read-then-write flow.
     reservations = []
     line_items = []
     downstream_steps = []
@@ -118,6 +119,7 @@ async def build_invoice(invoice_request: InvoiceRequest, context: A2AContext) ->
         persist_invoice(result, context)
         return result
     except Exception:
+        # Any failure after reservation triggers a best-effort release so inventory is not left reduced.
         for item in reservations:
             await call_agent_with_retry(
                 INVENTORY_BASE_URL,
